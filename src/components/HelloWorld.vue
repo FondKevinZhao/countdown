@@ -134,6 +134,13 @@ export default {
     this.refreshPage();
     window.addEventListener("beforeunload", this.beforeUnloadHandle);
   },
+  watch: {
+    countDownTimer() {
+      document.title =
+        this.countDownTimer +
+        `${this.isBreakTime ? " 休息倒计时" : " 工作倒计时"}`;
+    },
+  },
   methods: {
     // 处理页面刷新
     refreshPage() {
