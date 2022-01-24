@@ -134,6 +134,9 @@ export default {
     this.refreshPage();
     window.addEventListener("beforeunload", this.beforeUnloadHandle);
   },
+  beforeDestroy() {
+    this.beforeUnloadHandle(); // 切换侧边栏组件会卸载组件,处理等同于刷新问题
+  },
   watch: {
     countDownTimer() {
       document.title =
@@ -142,6 +145,16 @@ export default {
     },
   },
   methods: {
+    // momemnt格式化时间
+    formatTime(seconds) {
+      // +1是因为moment内部处理的时候使用的是向下取整,所以导致在最后一秒的时候,都显示为00:00,导致00:00被显示了1秒的时间,所以为了修正倒计时的显示问题,需要在时间上+1,只是在倒计时显示的时候+1,真正判断时间差并没有变化
+      const remainingTime = moment.duration(seconds + 1, "seconds");
+      // 将秒转化为分秒
+      this.countDownTimer = moment({
+        m: remainingTime.minutes(),
+        s: remainingTime.seconds(),
+      }).format("mm:ss");
+    },
     // 处理页面刷新
     refreshPage() {
       const timeStatus = JSON.parse(window.localStorage.getItem("timeStatus"));
@@ -172,6 +185,12 @@ export default {
         this.interval = 0;
         this.countDownTimer = countDownTimer;
         this.handleTime = handleTime;
+        // 将秒转化为分秒
+        // const res = this.formatTime(handleTime);
+        // // 刷新之后直接开始继续任务
+        // document.title = res;
+        // console.log("res", res);
+        this.timePause();
         window.localStorage.removeItem("timeStatus");
       }
     },
@@ -192,63 +211,68 @@ export default {
 
     // 倒计时和进度条的状态停止重置
     resetStatus() {
-      cancelAnimationFrame(this.interval);
+      clearTimeout(this.interval);
       this.countDownTimer = "00:00";
       this.percentage = 100;
       this.interval = null;
-      this.taskName = "";
+      this.taskName = this.isLoopText;
       this.isInput = false;
+    },
+
+    // 处理进度条
+    handleProgress() {
+      if (this.isBreakTime) {
+        this.percentage = (this.handleTime / (this.breakTime * 60)) * 100;
+      } else {
+        this.percentage = (this.handleTime / (this.workTime * 60)) * 100;
+      }
+    },
+
+    // 处理倒计时走完
+    isCountDownDone() {
+      // 倒计时走完
+      this.resetStatus();
+      if (this.isBreakTime === false) { // 说明是从工作时间进入休息时间
+      this.formatTime(this.breakTime * 60 -1);
+        // 结束工作时间,需要进入休息时间
+        this.taskName = "休息一下";
+        this.isBreakTime = true;
+        this.historyHandle(true);
+        this.countDown(this.breakTime * 60 * 1000 + Date.now());
+        this.workTimeNotification("恭喜您完成当前番茄钟！下面进入休息时间");
+      } else {
+        // 休息走完,需要循环或者停止
+        this.isBreakTime = false;
+        this.isInput = false;
+        this.workTimeNotification("休息时间总是很短暂，让我们开始工作吧");
+        // 判断是否循环
+        if (this.isLoop) {
+          this.taskName = this.isLoopText;
+          this.startWorkTime();
+          this.formatTime(this.workTime * 60 -1);
+        }
+      }
     },
 
     countDown(endTime) {
       // 处理倒计时和进度条的函数
-      const countDownAndProgress = () => {
+      const countDownWorkerOrBreakTime = () => {
         // 当前毫秒数
         let newTime = Date.now();
         // 如果时间未结束，对时间进行处理
         if (endTime - newTime > 0) {
           /* 秒 */
           this.handleTime = (endTime - newTime) / 1000;
-          // +1是因为moment内部处理的时候使用的是向下取整,所以导致在最后一秒的时候,都显示为00:00,导致00:00被显示了1秒的时间,所以为了修正倒计时的显示问题,需要在时间上+1,只是在倒计时显示的时候+1,真正判断时间差并没有变化
-          const remainingTime = moment.duration(
-            (endTime - newTime) / 1000 + 1,
-            "seconds"
-          );
-          // 将秒转化为分秒
-          this.countDownTimer = moment({
-            m: remainingTime.minutes(),
-            s: remainingTime.seconds(),
-          }).format("mm:ss");
-          if (this.isBreakTime) {
-            this.percentage = (this.handleTime / (this.breakTime * 60)) * 100;
-          } else {
-            this.percentage = (this.handleTime / (this.workTime * 60)) * 100;
-          }
-          this.interval = requestAnimationFrame(countDownAndProgress);
+          this.formatTime((endTime - newTime) / 1000);
+          // 执行进度条
+          this.handleProgress();
+          this.interval = setTimeout(countDownWorkerOrBreakTime, 1000);
         } else {
           // 倒计时走完
-          this.resetStatus();
-          if (this.isBreakTime === false) {
-            // 结束工作时间,需要进入休息时间
-            this.taskName = "休息一下";
-            this.isBreakTime = true;
-            this.historyHandle(true);
-            this.countDown(this.breakTime * 60 * 1000 + Date.now());
-            this.workTimeNotification("恭喜您完成当前番茄钟！下面进入休息时间");
-          } else {
-            // 休息走完,需要循环或者停止
-            this.isBreakTime = false;
-            this.isInput = false;
-            this.workTimeNotification("休息时间总是很短暂，让我们开始工作吧");
-            // 判断是否循环
-            if (this.isLoop) {
-              this.taskName = this.isLoopText;
-              this.startWorkTime();
-            }
-          }
+          this.isCountDownDone();
         }
       };
-      this.interval = requestAnimationFrame(countDownAndProgress);
+      this.interval = setTimeout(countDownWorkerOrBreakTime, 1000);
     },
 
     // 处理刷新丢失问题
@@ -287,7 +311,7 @@ export default {
     // 暂停/继续
     timePause() {
       if (this.interval) {
-        cancelAnimationFrame(this.interval);
+        clearTimeout(this.interval);
         this.interval = 0;
       } else {
         this.countDown(Date.now() + this.handleTime * 1000);
@@ -322,10 +346,12 @@ export default {
 
     // 开始工作
     startWorkTime() {
+      // 处理点击开始后的时间
+      this.formatTime((this.workTime * 60) - 1); // 因为format内部+1,-1修正时间显示
       // 循环时,保留第一次的任务名称;
-      if (this.isLoop) {
+      // if (this.isLoop) {
         this.isLoopText = this.taskName;
-      }
+      // }
       const localHistoryList =
         JSON.parse(localStorage.getItem("historyList")) || [];
       if (localHistoryList.length >= 50) {
@@ -334,7 +360,7 @@ export default {
       const startTime = Date.now();
       this.isBreakTime = false;
       this.isInput = true;
-      cancelAnimationFrame(this.interval);
+      clearTimeout(this.interval);
       this.countDown(startTime + this.workTime * 60 * 1000);
       const historyList = [
         ...this.historyList,
@@ -371,6 +397,7 @@ export default {
     stopTask() {
       this.historyHandle(false);
       this.resetStatus();
+      this.isBreakTime=false;
     },
 
     // 全局提示
