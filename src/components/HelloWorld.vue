@@ -3,7 +3,7 @@
     <!-- 上 -->
     <div class="top-part">
       <div class="title">
-        <div class="title-en">Wizard Timer</div>
+        <div class="title-en">Countdown Timer</div>
         <div class="title-ch">之番茄工作法</div>
       </div>
       <div class="countdown" :class="{ 'break-time': isBreakTime }">
@@ -232,8 +232,9 @@ export default {
     isCountDownDone() {
       // 倒计时走完
       this.resetStatus();
-      if (this.isBreakTime === false) { // 说明是从工作时间进入休息时间
-      this.formatTime(this.breakTime * 60 -1);
+      if (this.isBreakTime === false) {
+        // 说明是从工作时间进入休息时间
+        this.formatTime(this.breakTime * 60 - 1);
         // 结束工作时间,需要进入休息时间
         this.taskName = "休息一下";
         this.isBreakTime = true;
@@ -249,7 +250,7 @@ export default {
         if (this.isLoop) {
           this.taskName = this.isLoopText;
           this.startWorkTime();
-          this.formatTime(this.workTime * 60 -1);
+          this.formatTime(this.workTime * 60 - 1);
         }
       }
     },
@@ -347,10 +348,10 @@ export default {
     // 开始工作
     startWorkTime() {
       // 处理点击开始后的时间
-      this.formatTime((this.workTime * 60) - 1); // 因为format内部+1,-1修正时间显示
+      this.formatTime(this.workTime * 60 - 1); // 因为format内部+1,-1修正时间显示
       // 循环时,保留第一次的任务名称;
       // if (this.isLoop) {
-        this.isLoopText = this.taskName;
+      this.isLoopText = this.taskName;
       // }
       const localHistoryList =
         JSON.parse(localStorage.getItem("historyList")) || [];
@@ -397,7 +398,7 @@ export default {
     stopTask() {
       this.historyHandle(false);
       this.resetStatus();
-      this.isBreakTime=false;
+      this.isBreakTime = false;
     },
 
     // 全局提示
